@@ -12,7 +12,6 @@ from detectron2.engine.defaults import DefaultPredictor
 from detectron2.data.datasets.builtin_meta import COCO_CATEGORIES
 from detectron2.structures import BoxMode
 
-debugpy.listen(5678)
 
 CONFIG_FILE = "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"
 CONFIG_OPTS = ["MODEL.WEIGHTS", "model_final_971ab9.pkl", "MODEL.DEVICE", "cpu"]
