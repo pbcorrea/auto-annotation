@@ -1,10 +1,10 @@
 metadata:
-  name: detectron-mask-rcnn
+  name: detectron-mask-rcnn-cpu
   namespace: cvat
   annotations:
-    name: MaskRCNN via Detectron2
+    name: MaskRCNN_ResNet50
     type: detector
-    framework: Detectron2 (Pytorch)
+    framework: pytorch
     spec: |
       [
         { "id": 1, "name": "person" },
@@ -90,8 +90,8 @@ metadata:
       ]
 
 spec:
-  description: MaskRCNN from Detectron2
-  runtime: 'python:3.6'
+  description: MaskRCNN - ResNet50 from Detectron2
+  runtime: 'python:3.8'
   handler: main:handler
   eventTimeout: 30s
 
@@ -101,12 +101,12 @@ spec:
 
     directives:
       preCopy:
-        - kind: ARG
+        - kind: ENV
           value: DEBIAN_FRONTEND=noninteractive
         - kind: RUN
-          value: apt-get update && apt-get install git ffmpeg libsm6 libxext6 curl build-essential
+          value: apt-get update && apt-get install -y git ffmpeg libsm6 libxext6 curl build-essential
         - kind: RUN
-          value: python3 -m pip install torch torchvision opencv-python
+          value: python3 -m pip install torch torchvision opencv-python scikit-image
         - kind: RUN
           value: python3 -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
         - kind: WORKDIR
@@ -119,10 +119,7 @@ spec:
       workerAvailabilityTimeoutMilliseconds: 10000
       attributes:
         maxRequestBodySize: 33554432 # 32MB
-
-  resources:
-    limits:
-      nvidia.com/gpu: 1
+        port: 32768
 
   platform:
     attributes:
@@ -130,3 +127,4 @@ spec:
         name: always
         maximumRetryCount: 3
       mountMode: volume
+      network: cvat_cvat
