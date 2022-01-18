@@ -41,7 +41,7 @@ def handler(context, event):
     #1. Load data from request
     data = event.body
 
-    context.logger.info(f"Receiving data ({type(data)}):  {data}}")
+    context.logger.info(f"Receiving data ({type(data)}):  {data}")
     buf = io.BytesIO(base64.b64decode(data["image"]))
     image_id = int(data.get("image_id", -1))
     threshold = float(data.get("threshold", 0.5))
