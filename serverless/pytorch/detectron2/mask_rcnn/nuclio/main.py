@@ -4,18 +4,21 @@ import io
 from PIL import Image
 
 import numpy as np
-import pycocotools.mask as mask_util
+from skimage.measure import find_contours
+from skimage.measure import approximate_polygon
+
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import convert_PIL_to_numpy
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2.data.datasets.builtin_meta import COCO_CATEGORIES
-from detectron2.structures import BoxMode
 
 
 CONFIG_FILE = "COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"
 CONFIG_OPTS = ["MODEL.WEIGHTS", "model_final_971ab9.pkl", "MODEL.DEVICE", "cpu"]
 CONFIDENCE_THRESHOLD = 0.5
+MASK_THRESHOLD = 0.5
+
 
 def init_context(context):
     context.logger.info(f"Initializing model context")
@@ -34,44 +37,50 @@ def init_context(context):
     context.logger.info(f"Model initialized successfully!")
 
 
-
 def handler(context, event):
-    context.logger.info(f"Receiving label request")
+    context.logger.info("Run MaskRCNN - ResNet50")
+
+    context.logger.info_with(
+        'Got invoked',
+		trigger_kind=event.trigger.kind,
+		event_body=event.body
+        )
 
     #1. Load data from request
     data = event.body
 
     context.logger.info(f"Receiving data ({type(data)}):  {data}")
     buf = io.BytesIO(base64.b64decode(data["image"]))
-    image_id = int(data.get("image_id", -1))
     threshold = float(data.get("threshold", 0.5))
     image = convert_PIL_to_numpy(Image.open(buf), format="BGR")
 
     #2. Get predictions
     predictions = context.user_data.model_handler(image)
     instances = predictions['instances']
-    
-    #3. Cast predictions into
-    bboxes = BoxMode.convert(instances.pred_boxes, BoxMode.XYXY_ABS, BoxMode.XYWH_ABS)
+
+    #3. Cast predictions into CVAT format
+    masks = instances.pred_masks
     scores = instances.scores
     labels = instances.pred_classes
-    rles = [mask_util.encode(np.array(mask[:, :, None], order="F", dtype="uint8"))[0] for mask in instances.pred_masks]
-    for rle in rles:
-        rle["counts"] = rle["counts"].decode("utf-8")
 
     results = []
-
-    #4. Filter and retrieve results
-    for annotation_idx, (score, mask, bbox, label) in enumerate(zip(scores, rles, bboxes, labels), 1):
+    for mask, score, label in zip(masks, scores, labels):
         label = COCO_CATEGORIES[int(label)]["name"]
         if score >= threshold:
+            #4. Process masks
+            mask = mask.numpy().astype(np.uint8)
+            contours = find_contours(mask, MASK_THRESHOLD)
+            contour = contours[0]
+            contour = np.flip(contour, axis=1)
+            contour = approximate_polygon(contour, tolerance=2.5)
+            if len(contour) < 6:
+                continue
             results.append({
-                "id": annotation_idx,
-                "image_id": image_id,
-                "category_id": int(label),
-                "segmentation": mask,
-                "bbox": bbox,
-                "iscrowd": 0,
+                "confidence": str(score),
+                "label": label,
+                "points": contour.ravel().tolist(),
+                "type": "polygon",
             })
     return context.Response(body=json.dumps(results), headers={},
         content_type='application/json', status_code=200)
+
